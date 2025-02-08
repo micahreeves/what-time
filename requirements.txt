@@ -5,8 +5,5 @@ asyncio
 dateparser
 fuzzywuzzy
 python-Levenshtein
-logging
-PyNaCl
 flask
 python-dotenv
-datetime
