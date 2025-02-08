@@ -4,16 +4,22 @@ WORKDIR /app
 
 ENV PYTHONUNBUFFERED=1
 
-# Install dependencies
+# Install system dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     curl \
+    python3-dev \
+    build-essential \
+    libffi-dev \
     && rm -rf /var/lib/apt/lists/* \
     && apt-get clean
 
-# Copy and install requirements
+# Copy requirements first
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+
+# Install Python packages
+RUN pip install --no-cache-dir wheel && \
+    pip install --no-cache-dir -r requirements.txt
 
 # Copy bot code
 COPY whattime.py .
