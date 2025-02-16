@@ -1,7 +1,7 @@
 services:
-  whattime-bot:
+  what-time-bot:
     build: .              # This tells Docker to build from Dockerfile in current directory
-    container_name: whattime-bot
+    container_name: what-time-bot
     restart: unless-stopped
     environment:
       - DISCORD_BOT_TOKEN=${DISCORD_BOT_TOKEN}
@@ -11,4 +11,4 @@ services:
 
 volumes:
   bot-data:
-    name: whattime-bot-data
+    name: what-time-bot-data
