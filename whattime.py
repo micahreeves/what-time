@@ -465,6 +465,7 @@ class TimezoneHandler:
 # ---------------------------
 # 🔹 Time Parser
 # ---------------------------
+
 class TimeParser:
     def __init__(self):
         self.cache = {}
@@ -508,11 +509,13 @@ class TimeParser:
                 # Parse with user's timezone
                 tz = pytz.timezone(base_timezone)
                 now = datetime.now(tz)
+                
+                # First try parsing with dateparser
                 settings = {
                     'RELATIVE_BASE': now,
                     'TIMEZONE': base_timezone,
                     'RETURN_AS_TIMEZONE_AWARE': True,
-                    'PREFER_DATES_FROM': 'current_period'  # Changed to prefer current day
+                    'PREFER_DATES_FROM': 'current_period'
                 }
                 
                 loop = asyncio.get_event_loop()
@@ -522,27 +525,34 @@ class TimeParser:
                 )
                 
                 if parsed_dt:
-                    # If only time was provided (no date), use today's date
-                    if not any(word in input_text for word in ['tomorrow', 'today', 'next', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'monday']):
-                        # Check if the parsed time is earlier than current time
-                        if parsed_dt.hour < now.hour or (parsed_dt.hour == now.hour and parsed_dt.minute < now.minute):
-                            # If it's earlier than current time, assume tomorrow
+                    # Check if only time was provided (no date component)
+                    time_only_pattern = re.compile(r'^([0-9]|0[0-9]|1[0-9]|2[0-3])(?::|h)?([0-5][0-9])?(?:\s*(?:am|pm))?$', re.IGNORECASE)
+                    is_time_only = time_only_pattern.match(input_text) is not None
+                    
+                    # Also check if no date-related words are present
+                    date_words = ['tomorrow', 'today', 'next', 'tuesday', 'wednesday', 
+                                'thursday', 'friday', 'saturday', 'sunday', 'monday']
+                    has_date_words = any(word in input_text for word in date_words)
+                    
+                    if is_time_only and not has_date_words:
+                        # If time is earlier than current time, assume tomorrow
+                        if parsed_dt.hour < now.hour or (parsed_dt.hour == now.hour and parsed_dt.minute <= now.minute):
                             parsed_dt = parsed_dt + timedelta(days=1)
+                        # Otherwise, use today's date (which is the default)
+                    
+                    result = parsed_dt
                 else:
                     return None
 
-                # Convert to UTC and cache
-                utc_time = parsed_dt.astimezone(pytz.UTC)
-                self.cache[cache_key] = (utc_time, datetime.now())
-                return utc_time
-            
-            result = result.astimezone(pytz.UTC)
-            self.cache[cache_key] = (result, datetime.now())
-            return result
+            # Convert to UTC for storage
+            utc_time = result.astimezone(pytz.UTC)
+            self.cache[cache_key] = (utc_time, datetime.now())
+            return utc_time
             
         except Exception as e:
             logger.error(f"Time parsing error: {e}")
             return None
+
 # ---------------------------
 # 🔹 Bot Implementation
 # ---------------------------
@@ -589,53 +599,57 @@ class WhatTimeBot(discord.Client):
             return "Error formatting time conversions"
 
     async def register_commands(self):
-        """Register slash commands"""
-        
-        async def timezone_autocomplete(
-            interaction: discord.Interaction,
-            current: str,
-        ) -> List[app_commands.Choice[str]]:
-            """Provide autocomplete suggestions for timezone input"""
-            if not current:
-                # If no input, show common timezones
-                suggestions = [
-                    ("US Eastern (EST)", "EST"),
-                    ("US Central (CST)", "CST"),
-                    ("US Pacific (PST)", "PST"),
-                    ("UK (GMT/BST)", "GMT"),
-                    ("Central Europe", "CET")
-                ]
-            else:
-                # Use fuzzy matching to find suggestions
-                current = current.upper()
-                matches = []
-                
-                # Check common abbreviations first
-                common_matches = process.extract(
-                    current,
-                    COMMON_TIMEZONE_MAPPINGS.keys(),
-                    limit=3
-                )
-                matches.extend([
-                    (f"{name} ({COMMON_TIMEZONE_MAPPINGS[name]})", name)
-                    for name, score in common_matches
-                    if score > 60
-                ])
+    """Register slash commands"""
+    
+    async def timezone_autocomplete(
+        interaction: discord.Interaction,
+        current: str,
+    ) -> List[app_commands.Choice[str]]:
+        """Provide autocomplete suggestions for timezone input"""
+        if not current:
+            # If no input, show common timezones
+            suggestions = [
+                ("US Eastern (EST)", "EST"),
+                ("US Central (CST)", "CST"),
+                ("US Pacific (PST)", "PST"),
+                ("UK (GMT/BST)", "GMT"),
+                ("Central Europe", "CET")
+            ]
+            return [
+                app_commands.Choice(name=display, value=value)
+                for display, value in suggestions
+            ]
+        else:
+            # Use fuzzy matching to find suggestions
+            current = current.upper()
+            matches = []
+            
+            # Check common abbreviations first
+            common_matches = process.extract(
+                current,
+                COMMON_TIMEZONE_MAPPINGS.keys(),
+                limit=3
+            )
+            matches.extend([
+                (f"{name} ({COMMON_TIMEZONE_MAPPINGS[name]})", name)
+                for name, score in common_matches
+                if score > 60
+            ])
 
-                # Then check full timezone names
-                tz_matches = process.extract(
-                    current,
-                    pytz.all_timezones,
-                    limit=3
-                )
-                matches.extend([
-                    (name.replace("_", " "), name)
-                    for name, score in tz_matches
-                    if score > 60
-                ])
-                
-                suggestions = list(dict.fromkeys(matches))  # Remove duplicates
-                
+            # Then check full timezone names
+            tz_matches = process.extract(
+                current,
+                pytz.all_timezones,
+                limit=3
+            )
+            matches.extend([
+                (name.replace("_", " "), name)
+                for name, score in tz_matches
+                if score > 60
+            ])
+            
+            suggestions = list(dict.fromkeys(matches))  # Remove duplicates
+            
             return [
                 app_commands.Choice(name=display, value=value)
                 for display, value in suggestions[:25]  # Discord limits to 25 choices
@@ -740,68 +754,72 @@ class WhatTimeBot(discord.Client):
                 )
 
         @self.tree.command(
-            name="event",
-            description="Convert an event time to different time zones"
-        )
-        @app_commands.describe(
-            time="Time to convert (e.g., '3pm tomorrow', '15:00', 'in 2 hours')"
+    name="event",
+    description="Convert an event time to different time zones"
+)
+@app_commands.describe(
+    time="Time to convert (e.g., '3pm tomorrow', '15:00', 'in 2 hours')"
+)
+async def event_command(interaction: discord.Interaction, time: str):
+    """Handle time conversion requests"""
+    try:
+        # First check timezone and parse time before any deferrals
+        user_timezone = await self.db.get_timezone(interaction.user.id)
+        if not user_timezone:
+            await interaction.response.send_message(
+                "❌ Please set your timezone first using `/timezone`\n"
+                "Example: `/timezone CST` or `/timezone America/Chicago`",
+                ephemeral=True
+            )
+            return
+
+        parsed_time = await self.time_parser.parse_time(time, user_timezone)
+        if not parsed_time:
+            await interaction.response.send_message(
+                "❌ Could not understand that time format. Try something like:\n" +
+                "• `3pm tomorrow`\n" +
+                "• `15:00`\n" +
+                "• `in 2 hours`",
+                ephemeral=True
+            )
+            return
+
+        # Only defer after successful validation
+        await interaction.response.defer()
+
+        # Create response embed
+        local_time = parsed_time.astimezone(pytz.timezone(user_timezone))
+        embed = discord.Embed(
+            title="🌍 Time Conversion",
+            description=(
+                f"**🕒 Time ({user_timezone})** → "
+                f"`{local_time.strftime('%b %d, %H:%M %Z')}`\n\n"
+                f"{await self.format_time_conversions(parsed_time, interaction.guild_id)}"
+            ),
+            color=discord.Color.blue()
         )
         
-        async def event_command(interaction: discord.Interaction, time: str):
-            """Handle time conversion requests"""
+        embed.set_footer(text=f"Requested by {interaction.user.name}")
+        await interaction.followup.send(embed=embed)
+
+    except Exception as e:
+        logger.error(f"Error in event command: {e}")
+        # If we haven't responded yet, send an error message
+        if not interaction.response.is_done():
+            await interaction.response.send_message(
+                "❌ Error processing command",
+                ephemeral=True
+            )
+        else:
+            # Otherwise use followup
             try:
-                # Check timezone before deferring
-                user_timezone = await self.db.get_timezone(interaction.user.id)
-                if not user_timezone:
-                    await interaction.response.defer(ephemeral=True)
-                    embed = discord.Embed(
-                        title="❌ Timezone Required",
-                        description=(
-                            "Please set your timezone first using `/timezone`\n"
-                            "Example: `/timezone CST` or `/timezone America/Chicago`"
-                        ),
-                        color=discord.Color.red()
-                    )
-                    await interaction.followup.send(embed=embed, ephemeral=True)
-                    return
-
-                # Parse time before deferring the response
-                parsed_time = await self.time_parser.parse_time(time, user_timezone)
-                if not parsed_time:
-                    await interaction.response.defer(ephemeral=True)
-                    await interaction.followup.send(
-                        "❌ Could not understand that time format. Try something like:\n" +
-                        "• `3pm tomorrow`\n" +
-                        "• `15:00`\n" +
-                        "• `in 2 hours`",
-                        ephemeral=True
-                    )
-                    return
-
-                # If both timezone and time are valid, defer normally for public response
-                await interaction.response.defer()
-
-                # Create response embed
-                local_time = parsed_time.astimezone(pytz.timezone(user_timezone))
-                embed = discord.Embed(
-                    title="🌍 Time Conversion",
-                    description=(
-                        f"**🕒 Time ({user_timezone})** → "
-                        f"`{local_time.strftime('%b %d, %H:%M %Z')}`\n\n"
-                        f"{await self.format_time_conversions(parsed_time, interaction.guild_id)}"
-                    ),
-                    color=discord.Color.blue()
-                )
-                
-                embed.set_footer(text=f"Requested by {interaction.user.name}")
-                await interaction.followup.send(embed=embed)
-
-            except Exception as e:
-                logger.error(f"Error in event command: {e}")
                 await interaction.followup.send(
                     "❌ Error processing command",
                     ephemeral=True
                 )
+            except Exception:
+                pass  # If even this fails, we've done all we can
+        
         @self.tree.command(
             name="format_time",
             description="Get time in different formats with calendar link"
@@ -971,7 +989,7 @@ class WhatTimeBot(discord.Client):
                     return
 
                 # Validate and match timezone
-                matched_timezone, suggestions = await self.timezone_handler.find_timezone(timezone)
+                matched_timezone, suggestions = await self.db.timezone_handler.find_timezone(timezone)
                 if not matched_timezone:
                     suggestions_text = "\n".join([
                         f"• `{tz}` - {tz.replace('_', ' ')}" 
