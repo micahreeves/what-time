@@ -507,11 +507,12 @@ class TimeParser:
             else:
                 # Parse with user's timezone
                 tz = pytz.timezone(base_timezone)
+                now = datetime.now(tz)
                 settings = {
-                    'RELATIVE_BASE': datetime.now(tz),
+                    'RELATIVE_BASE': now,
                     'TIMEZONE': base_timezone,
                     'RETURN_AS_TIMEZONE_AWARE': True,
-                    'PREFER_DATES_FROM': 'future'
+                    'PREFER_DATES_FROM': 'current_period'  # Changed to prefer current day
                 }
                 
                 loop = asyncio.get_event_loop()
@@ -521,13 +522,20 @@ class TimeParser:
                 )
                 
                 if parsed_dt:
-                    # Convert to UTC and cache
-                    utc_time = parsed_dt.astimezone(pytz.UTC)
-                    self.cache[cache_key] = (utc_time, datetime.now())
-                    return utc_time
-                
-                return None
+                    # If only time was provided (no date), use today's date
+                    if not any(word in input_text for word in ['tomorrow', 'today', 'next', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'monday']):
+                        # Check if the parsed time is earlier than current time
+                        if parsed_dt.hour < now.hour or (parsed_dt.hour == now.hour and parsed_dt.minute < now.minute):
+                            # If it's earlier than current time, assume tomorrow
+                            parsed_dt = parsed_dt + timedelta(days=1)
+                else:
+                    return None
 
+                # Convert to UTC and cache
+                utc_time = parsed_dt.astimezone(pytz.UTC)
+                self.cache[cache_key] = (utc_time, datetime.now())
+                return utc_time
+            
             result = result.astimezone(pytz.UTC)
             self.cache[cache_key] = (result, datetime.now())
             return result
@@ -643,9 +651,15 @@ class WhatTimeBot(discord.Client):
             
             try:
                 current_zones = await self.db.get_server_timezones(interaction.guild_id)
+                if not current_zones:
+                    return []
+
                 if not current:
                     # If no input, show all configured timezones
-                    suggestions = [(name, name) for name in current_zones.keys()]
+                    suggestions = [
+                        app_commands.Choice(name=name, value=name)
+                        for name in current_zones.keys()
+                    ]
                 else:
                     # Use fuzzy matching to find matching names
                     matches = process.extract(
@@ -653,71 +667,85 @@ class WhatTimeBot(discord.Client):
                         current_zones.keys(),
                         limit=5
                     )
-                    suggestions = [(name, name) for name, score in matches if score > 60]
+                    suggestions = [
+                        app_commands.Choice(name=name, value=name)
+                        for name, score in matches 
+                        if score > 60
+                    ]
                 
-                return [
-                    app_commands.Choice(name=display, value=value)
-                    for display, value in suggestions
-                ]
-            except Exception:
+                return suggestions[:25]  # Discord limits to 25 choices
+            except Exception as e:
+                logger.error(f"Error in timezone_name_autocomplete: {e}")
                 return []
+
         @self.tree.command(
-            name="timezone",
-            description="Set your timezone for event time conversions"
+            name="remove_timezone",
+            description="Remove a timezone from the display"
         )
         @app_commands.describe(
-            timezone="Your timezone (e.g., 'CST', 'EST', 'America/Chicago')"
+            display_name="Display name of timezone to remove"
         )
-        @app_commands.autocomplete(timezone=timezone_autocomplete)
-        async def timezone_command(interaction: discord.Interaction, timezone: str):
-            """Set timezone command"""
+        @app_commands.autocomplete(display_name=timezone_name_autocomplete)
+        async def remove_timezone(interaction: discord.Interaction, display_name: str):
             try:
                 await interaction.response.defer(ephemeral=True)
-                success, matched_timezone, suggestions = await self.db.set_timezone(
-                    interaction.user.id,
-                    timezone
+                
+                if not interaction.guild_id:
+                    await interaction.followup.send(
+                        "❌ This command can only be used in servers",
+                        ephemeral=True
+                    )
+                    return
+
+                current_zones = await self.db.get_server_timezones(interaction.guild_id)
+                if not current_zones:
+                    await interaction.followup.send(
+                        "❌ No custom timezones set for this server.",
+                        ephemeral=True
+                    )
+                    return
+
+                if display_name not in current_zones:
+                    zones_list = "\n".join([f"• {name}" for name in current_zones.keys()])
+                    await interaction.followup.send(
+                        f"❌ Timezone '{display_name}' not found. Current timezones:\n{zones_list}",
+                        ephemeral=True
+                    )
+                    return
+
+                success, message = await self.db.remove_server_timezone(
+                    interaction.guild_id,
+                    display_name
                 )
 
                 if success:
+                    # Show preview of current display
+                    now = datetime.now(pytz.UTC)
+                    preview = await self.format_time_conversions(now, interaction.guild_id)
+                    
                     embed = discord.Embed(
-                        title="✅ Timezone Updated",
-                        description=(
-                            f"Your timezone has been set to **{matched_timezone}**\n"
-                            f"Input recognized: `{timezone}`\n\n"
-                            f"You can now use `/event` to convert times!"
-                        ),
+                        title="✅ Timezone Removed",
+                        description=f"Removed **{display_name}**\n\nCurrent display:\n{preview}",
                         color=discord.Color.green()
                     )
                     await interaction.followup.send(embed=embed, ephemeral=True)
                 else:
-                    if suggestions:
-                        suggestions_text = "\n".join([f"• `{tz}`" for tz in suggestions])
-                        embed = discord.Embed(
-                            title="❌ Invalid Timezone",
-                            description=(
-                                f"Couldn't find a timezone matching `{timezone}`.\n\n"
-                                f"Did you mean one of these?\n{suggestions_text}\n\n"
-                                "Try using the autocomplete suggestions when typing!"
-                            ),
-                            color=discord.Color.red()
-                        )
-                    else:
-                        embed = discord.Embed(
-                            title="❌ Invalid Timezone",
-                            description=(
-                                "Please enter a valid timezone.\n"
-                                "Examples: `CST`, `EST`, `America/Chicago`, `Europe/London`"
-                            ),
-                            color=discord.Color.red()
-                        )
-                    await interaction.followup.send(embed=embed, ephemeral=True)
+                    await interaction.followup.send(f"❌ {message}", ephemeral=True)
+
             except Exception as e:
-                logger.error(f"Error in timezone command: {e}")
+                logger.error(f"Error in remove_timezone: {e}")
                 await interaction.followup.send(
-                    "❌ An error occurred while processing your request.",
+                    "❌ Error removing timezone",
                     ephemeral=True
                 )
 
+        @self.tree.command(
+            name="event",
+            description="Convert an event time to different time zones"
+        )
+        @app_commands.describe(
+            time="Time to convert (e.g., '3pm tomorrow', '15:00', 'in 2 hours')"
+        )
         @self.tree.command(
             name="event",
             description="Convert an event time to different time zones"
@@ -743,11 +771,10 @@ class WhatTimeBot(discord.Client):
                     await interaction.followup.send(embed=embed, ephemeral=True)
                     return
 
-                # If we have a timezone, then defer normally for public response
-                await interaction.response.defer()
-
+                # Parse time before deferring the response
                 parsed_time = await self.time_parser.parse_time(time, user_timezone)
                 if not parsed_time:
+                    await interaction.response.defer(ephemeral=True)
                     await interaction.followup.send(
                         "❌ Could not understand that time format. Try something like:\n" +
                         "• `3pm tomorrow`\n" +
@@ -756,6 +783,9 @@ class WhatTimeBot(discord.Client):
                         ephemeral=True
                     )
                     return
+
+                # If both timezone and time are valid, defer normally for public response
+                await interaction.response.defer()
 
                 # Create response embed
                 local_time = parsed_time.astimezone(pytz.timezone(user_timezone))
