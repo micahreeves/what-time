@@ -97,9 +97,11 @@ TIMEZONE_PRESETS = {
 DEFAULT_TIMEZONES = {
     "UTC": "UTC",
     "🇺🇸 Eastern": "America/New_York",
-    "🇺🇸 Central": "America/Chicago",
     "🇺🇸 Pacific": "America/Los_Angeles",
-    "🇬🇧 London": "Europe/London"
+    "🇬🇧 London": "Europe/London",
+    "🇩🇪 Berlin": "Europe/Berlin",
+    "🇫🇮 Helsinki": "Europe/Helsinki",
+    
 }
 
 # ---------------------------
@@ -837,11 +839,11 @@ class WhatTimeBot(discord.Client):
                 # Create preview message
                 preview_msg = (
                     "⏰ **Timestamps will show as:**\n"
-                    f"Standard: <t:{timestamp}>\n"
-                    f"Relative: <t:{timestamp}:R>\n"
-                    f"Short Time: <t:{timestamp}:t>\n"
-                    f"Long Format: <t:{timestamp}:F>\n\n"
-                    "Click the buttons below to copy the timestamp codes!"
+                    f"**Standard**: <t:{timestamp}>\n"
+                    f"**Relative**: <t:{timestamp}:R>\n"
+                    f"**Short Time**: <t:{timestamp}:t>\n"
+                    f"**Long Format**: <t:{timestamp}:F>\n\n"
+                    "**Click the buttons below to copy the timestamp codes!**"
                 )
 
                 # Send both the embed and timestamps with buttons
@@ -1089,11 +1091,11 @@ class WhatTimeBot(discord.Client):
                 # Create preview message
                 preview_msg = (
                     "⏰ **Timestamps will show as:**\n"
-                    f"Standard: <t:{timestamp}>\n"
-                    f"Relative: <t:{timestamp}:R>\n"
-                    f"Short Time: <t:{timestamp}:t>\n"
-                    f"Long Format: <t:{timestamp}:F>\n\n"
-                    "Click the buttons below to copy the codes!"
+                    f"**Standard**: <t:{timestamp}>\n"
+                    f"**Relative**: <t:{timestamp}:R>\n"
+                    f"**Short Time**: <t:{timestamp}:t>\n"
+                    f"**Long Format**: <t:{timestamp}:F>\n\n"
+                    "**Click the buttons below to copy the timestamp codes!**"
                 )
 
                 await interaction.followup.send(preview_msg, view=view, ephemeral=True)
