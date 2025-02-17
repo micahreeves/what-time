@@ -369,7 +369,8 @@ class TimezoneDB:
         except Exception as e:
             logger.error(f"Error in set_timezone: {e}")
             return False, None, []
-async def get_server_timezones(self, server_id: int) -> Dict[str, str]:
+
+    async def get_server_timezones(self, server_id: int) -> Dict[str, str]:
         """Get timezone display list for specific server"""
         try:
             async with aiosqlite.connect(self.db_path) as db:
@@ -378,12 +379,12 @@ async def get_server_timezones(self, server_id: int) -> Dict[str, str]:
                     (server_id,)
                 ) as cursor:
                     results = await cursor.fetchall()
-                    return {row[0]: row[1] for row in results}
+                    return {row[0]: row[1] for row in results} if results else {}
         except Exception as e:
             logger.error(f"Error getting server timezones: {e}")
             return {}
 
-async def set_server_timezone(self, server_id: int, display_name: str, timezone: str) -> Tuple[bool, str]:
+    async def set_server_timezone(self, server_id: int, display_name: str, timezone: str) -> Tuple[bool, str]:
         """Add or update server timezone, maintaining 5 timezone limit"""
         try:
             async with aiosqlite.connect(self.db_path) as db:
@@ -410,7 +411,7 @@ async def set_server_timezone(self, server_id: int, display_name: str, timezone:
             logger.error(f"Error setting server timezone: {e}")
             return False, f"Error setting timezone: {str(e)}"
 
-async def remove_server_timezone(self, server_id: int, display_name: str) -> Tuple[bool, str]:
+    async def remove_server_timezone(self, server_id: int, display_name: str) -> Tuple[bool, str]:
         """Remove a timezone from server's list"""
         try:
             async with aiosqlite.connect(self.db_path) as db:
@@ -423,7 +424,6 @@ async def remove_server_timezone(self, server_id: int, display_name: str) -> Tup
         except Exception as e:
             logger.error(f"Error removing server timezone: {e}")
             return False, f"Error removing timezone: {str(e)}"
-
 # ---------------------------
 # 🔹 Timezone Handler
 # ---------------------------
