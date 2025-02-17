@@ -644,10 +644,10 @@ class WhatTimeBot(discord.Client):
         async def event_command(interaction: discord.Interaction, time: str):
             """Handle time conversion requests"""
             try:
-                await interaction.response.defer()
-                
+                # Make initial defer ephemeral if we need to show an error
                 user_timezone = await self.db.get_timezone(interaction.user.id)
                 if not user_timezone:
+                    await interaction.response.defer(ephemeral=True)
                     embed = discord.Embed(
                         title="❌ Timezone Required",
                         description=(
@@ -658,6 +658,9 @@ class WhatTimeBot(discord.Client):
                     )
                     await interaction.followup.send(embed=embed, ephemeral=True)
                     return
+                
+                # If we have a timezone, then defer normally for public response
+                await interaction.response.defer()
 
                 parsed_time = await self.time_parser.parse_time(time, user_timezone)
                 if not parsed_time:
