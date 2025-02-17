@@ -633,6 +633,7 @@ class WhatTimeBot(discord.Client):
                     "❌ An error occurred while processing your request.",
                     ephemeral=True
                 )
+
         @self.tree.command(
             name="event",
             description="Convert an event time to different time zones"
@@ -766,6 +767,54 @@ class WhatTimeBot(discord.Client):
                 logger.error(f"Error in format_time: {e}")
                 await interaction.followup.send(
                     "❌ Error formatting time",
+                    ephemeral=True
+                )
+
+        @self.tree.command(
+            name="timestamps",
+            description="Get Discord timestamp formats for a time"
+        )
+        @app_commands.describe(
+            time="Time to format (e.g., '3pm tomorrow', '15:00')"
+        )
+        async def timestamps(interaction: discord.Interaction, time: str):
+            try:
+                await interaction.response.defer(ephemeral=True)
+                
+                user_timezone = await self.db.get_timezone(interaction.user.id)
+                if not user_timezone:
+                    await interaction.followup.send(
+                        "❌ Please set your timezone first with /timezone",
+                        ephemeral=True
+                    )
+                    return
+
+                parsed_time = await self.time_parser.parse_time(time, user_timezone)
+                if not parsed_time:
+                    await interaction.followup.send(
+                        "❌ Could not understand that time format",
+                        ephemeral=True
+                    )
+                    return
+
+                # Format timestamps
+                timestamp = int(parsed_time.timestamp())
+                formatted_response = "**Discord Timestamp Formats**\nCopy any of these codes:\n\n"
+                
+                formatted_response += f"• Standard: `<t:{timestamp}>`\n"
+                formatted_response += f"• Relative: `<t:{timestamp}:R>`\n"
+                formatted_response += f"• Short Time: `<t:{timestamp}:t>`\n"
+                formatted_response += f"• Long Format: `<t:{timestamp}:F>`\n\n"
+                formatted_response += "Shows as:\n"
+                formatted_response += f"<t:{timestamp}>\n"
+                formatted_response += f"<t:{timestamp}:R>"
+
+                await interaction.followup.send(formatted_response, ephemeral=True)
+
+            except Exception as e:
+                logger.error(f"Error in timestamps: {e}")
+                await interaction.followup.send(
+                    "❌ Error formatting timestamps",
                     ephemeral=True
                 )
 # ---------------------------
