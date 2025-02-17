@@ -826,55 +826,7 @@ async def start_bot():
     try:
         logger.info("Starting bot...")
         await bot.start(TOKEN)
-    except KeyboardInterrupt:@self.tree.command(
-            name="timestamps",
-            description="Get Discord timestamp formats for a time"
-        )
-        @app_commands.describe(
-            time="Time to format (e.g., '3pm tomorrow', '15:00')"
-        )
-        
-        async def timestamps(interaction: discord.Interaction, time: str):
-            try:
-                await interaction.response.defer(ephemeral=True)
-                
-                user_timezone = await self.db.get_timezone(interaction.user.id)
-                if not user_timezone:
-                    await interaction.followup.send(
-                        "❌ Please set your timezone first with /timezone",
-                        ephemeral=True
-                    )
-                    return
-
-                parsed_time = await self.time_parser.parse_time(time, user_timezone)
-                if not parsed_time:
-                    await interaction.followup.send(
-                        "❌ Could not understand that time format",
-                        ephemeral=True
-                    )
-                    return
-
-                # Format timestamps
-                time_formatter = TimeFormatter(parsed_time)
-                formats = time_formatter.get_all_formats()
-                
-                # Create response with each code in its own code block
-                formatted_response = "**Discord Timestamp Formats**\nCopy any of these codes:\n\n"
-                
-                for name, code in formats.items():
-                    formatted_response += f"**{name}**\n`{code}`\nShows as: {code}\n\n"
-
-                await interaction.followup.send(
-                    formatted_response,
-                    ephemeral=True
-                )
-
-            except Exception as e:
-                logger.error(f"Error in timestamps: {e}")
-                await interaction.followup.send(
-                    "❌ Error formatting timestamps",
-                    ephemeral=True
-                )
+    except KeyboardInterrupt:
         logger.info("Shutting down bot gracefully...")
         await bot.close()
     except Exception as e:
