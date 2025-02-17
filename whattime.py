@@ -164,9 +164,8 @@ class TimestampButton(discord.ui.Button):
         self.timestamp_code = timestamp_code
 
     async def callback(self, interaction: discord.Interaction):
-        # Send just the timestamp code in a code block for easy copying
         await interaction.response.send_message(
-            f"```{self.timestamp_code}```",
+            self.timestamp_code,
             ephemeral=True
         )
 
