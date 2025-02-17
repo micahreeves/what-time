@@ -682,10 +682,13 @@ class WhatTimeBot(discord.Client):
             name="remove_timezone",
             description="Remove a timezone from the display"
         )
+        
         @app_commands.describe(
             display_name="Display name of timezone to remove"
         )
+        
         @app_commands.autocomplete(display_name=timezone_name_autocomplete)
+        
         async def remove_timezone(interaction: discord.Interaction, display_name: str):
             try:
                 await interaction.response.defer(ephemeral=True)
@@ -746,13 +749,7 @@ class WhatTimeBot(discord.Client):
         @app_commands.describe(
             time="Time to convert (e.g., '3pm tomorrow', '15:00', 'in 2 hours')"
         )
-        @self.tree.command(
-            name="event",
-            description="Convert an event time to different time zones"
-        )
-        @app_commands.describe(
-            time="Time to convert (e.g., '3pm tomorrow', '15:00', 'in 2 hours')"
-        )
+        
         async def event_command(interaction: discord.Interaction, time: str):
             """Handle time conversion requests"""
             try:
@@ -1034,59 +1031,6 @@ class WhatTimeBot(discord.Client):
                     ephemeral=True
                 )
 
-        @self.tree.command(
-            name="remove_timezone",
-            description="Remove a timezone from the display"
-        )
-        @app_commands.describe(
-            display_name="Display name of timezone to remove"
-        )
-        @app_commands.autocomplete(display_name=timezone_name_autocomplete)
-        async def remove_timezone(interaction: discord.Interaction, display_name: str):
-            try:
-                await interaction.response.defer(ephemeral=True)
-                
-                if not interaction.guild_id:
-                    await interaction.followup.send(
-                        "❌ This command can only be used in servers",
-                        ephemeral=True
-                    )
-                    return
-
-                current_zones = await self.db.get_server_timezones(interaction.guild_id)
-                if display_name not in current_zones:
-                    zones_list = "\n".join([f"• {name}" for name in current_zones.keys()])
-                    await interaction.followup.send(
-                        f"❌ Timezone '{display_name}' not found. Current timezones:\n{zones_list}",
-                        ephemeral=True
-                    )
-                    return
-
-                success, message = await self.db.remove_server_timezone(
-                    interaction.guild_id,
-                    display_name
-                )
-
-                if success:
-                    # Show preview of current display
-                    now = datetime.now(pytz.UTC)
-                    preview = await self.format_time_conversions(now, interaction.guild_id)
-                    
-                    embed = discord.Embed(
-                        title="✅ Timezone Removed",
-                        description=f"Removed **{display_name}**\n\nCurrent display:\n{preview}",
-                        color=discord.Color.green()
-                    )
-                    await interaction.followup.send(embed=embed, ephemeral=True)
-                else:
-                    await interaction.followup.send(f"❌ {message}", ephemeral=True)
-
-            except Exception as e:
-                logger.error(f"Error in remove_timezone: {e}")
-                await interaction.followup.send(
-                    "❌ Error removing timezone",
-                    ephemeral=True
-                )
         @self.tree.command(
             name="timestamps",
             description="Get Discord timestamp formats for a time"
