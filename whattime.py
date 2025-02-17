@@ -682,13 +682,10 @@ class WhatTimeBot(discord.Client):
             name="remove_timezone",
             description="Remove a timezone from the display"
         )
-        
         @app_commands.describe(
             display_name="Display name of timezone to remove"
         )
-        
         @app_commands.autocomplete(display_name=timezone_name_autocomplete)
-        
         async def remove_timezone(interaction: discord.Interaction, display_name: str):
             try:
                 await interaction.response.defer(ephemeral=True)
@@ -1030,7 +1027,6 @@ class WhatTimeBot(discord.Client):
                     "❌ Error adding timezone",
                     ephemeral=True
                 )
-
         @self.tree.command(
             name="timestamps",
             description="Get Discord timestamp formats for a time"
