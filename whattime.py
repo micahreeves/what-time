@@ -164,8 +164,9 @@ class TimestampButton(discord.ui.Button):
         self.timestamp_code = timestamp_code
 
     async def callback(self, interaction: discord.Interaction):
+        # Send just the timestamp code in a code block for easy copying
         await interaction.response.send_message(
-            f"```{self.timestamp_code}```\nCopy the code above!",
+            f"```{self.timestamp_code}```",
             ephemeral=True
         )
 
@@ -854,7 +855,7 @@ class WhatTimeBot(discord.Client):
                     "❌ Error formatting time",
                     ephemeral=True
                 )
-
+        
         @self.tree.command(
             name="set_display",
             description="Set which timezones to display in time conversions"
@@ -1055,7 +1056,55 @@ class WhatTimeBot(discord.Client):
                     "❌ Error removing timezone",
                     ephemeral=True
                 )
+        @self.tree.command(
+            name="timestamps",
+            description="Get Discord timestamp formats for a time"
+        )
+        @app_commands.describe(
+            time="Time to format (e.g., '3pm tomorrow', '15:00')"
+        )
+        async def timestamps(interaction: discord.Interaction, time: str):
+            try:
+                await interaction.response.defer(ephemeral=True)
+                
+                user_timezone = await self.db.get_timezone(interaction.user.id)
+                if not user_timezone:
+                    await interaction.followup.send(
+                        "❌ Please set your timezone first with /timezone",
+                        ephemeral=True
+                    )
+                    return
 
+                parsed_time = await self.time_parser.parse_time(time, user_timezone)
+                if not parsed_time:
+                    await interaction.followup.send(
+                        "❌ Could not understand that time format",
+                        ephemeral=True
+                    )
+                    return
+
+                # Create timestamp buttons view
+                timestamp = int(parsed_time.timestamp())
+                view = TimestampView(timestamp)
+
+                # Create preview message
+                preview_msg = (
+                    "⏰ **Timestamps will show as:**\n"
+                    f"Standard: <t:{timestamp}>\n"
+                    f"Relative: <t:{timestamp}:R>\n"
+                    f"Short Time: <t:{timestamp}:t>\n"
+                    f"Long Format: <t:{timestamp}:F>\n\n"
+                    "Click the buttons below to copy the codes!"
+                )
+
+                await interaction.followup.send(preview_msg, view=view, ephemeral=True)
+
+            except Exception as e:
+                logger.error(f"Error in timestamps: {e}")
+                await interaction.followup.send(
+                    "❌ Error formatting timestamps",
+                    ephemeral=True
+                )
 # ---------------------------
 # 🔹 Main Execution
 # ---------------------------
