@@ -275,7 +275,7 @@ class CalendarFormatter:
 # 🔹 Database Management
 # ---------------------------
 class TimezoneDB:
-    def __init__(self, db_path: str = "timezones.db"):
+    def __init__(self, db_path: str = "data/timezones.db"):
         self.db_path = db_path
         self.timezone_handler = TimezoneHandler()
 
