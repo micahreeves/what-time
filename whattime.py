@@ -601,7 +601,7 @@ class WhatTimeBot(discord.Client):
     async def register_commands(self):
     """Register slash commands"""
     
-    async def timezone_autocomplete(
+       async def timezone_autocomplete(
         interaction: discord.Interaction,
         current: str,
     ) -> List[app_commands.Choice[str]]:
