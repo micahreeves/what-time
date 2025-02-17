@@ -736,15 +736,7 @@ class WhatTimeBot(discord.Client):
                 template_info = CALENDAR_TEMPLATES.get(template, CALENDAR_TEMPLATES["event"])
                 full_title = f"{template_info['title_prefix']}{title}"
                 
-                # Create formatted text and embed
-                calendar_text = self.calendar_formatter.create_calendar_text(
-                    parsed_time,
-                    full_title,
-                    template_info["duration"],
-                    template,
-                    description or template_info["description"]
-                )
-
+                # Create embed for event details
                 embed = self.calendar_formatter.create_calendar_embed(
                     parsed_time,
                     full_title,
@@ -753,11 +745,22 @@ class WhatTimeBot(discord.Client):
                     description or template_info["description"]
                 )
 
-                await interaction.followup.send(
-                    content=calendar_text,
-                    embed=embed,
-                    ephemeral=True
+                # Create separate timestamp message
+                timestamp = int(parsed_time.timestamp())
+                timestamp_msg = (
+                    "⏰ **Discord Timestamps** (Click code to copy):\n"
+                    f"• Standard: `<t:{timestamp}>`\n"
+                    f"• Relative: `<t:{timestamp}:R>`\n"
+                    f"• Short Time: `<t:{timestamp}:t>`\n"
+                    f"• Long Format: `<t:{timestamp}:F>`\n\n"
+                    "Shows as:\n"
+                    f"<t:{timestamp}>\n"
+                    f"<t:{timestamp}:R>"
                 )
+
+                # Send both the embed and timestamps separately
+                await interaction.followup.send(embed=embed, ephemeral=True)
+                await interaction.followup.send(timestamp_msg, ephemeral=True)
 
             except Exception as e:
                 logger.error(f"Error in format_time: {e}")
@@ -765,13 +768,23 @@ class WhatTimeBot(discord.Client):
                     "❌ Error formatting time",
                     ephemeral=True
                 )
-        @self.tree.command(
+# ---------------------------
+# 🔹 Main Execution
+# ---------------------------
+async def start_bot():
+    """Start the bot with proper error handling"""
+    bot = WhatTimeBot()
+    try:
+        logger.info("Starting bot...")
+        await bot.start(TOKEN)
+    except KeyboardInterrupt:@self.tree.command(
             name="timestamps",
             description="Get Discord timestamp formats for a time"
         )
         @app_commands.describe(
             time="Time to format (e.g., '3pm tomorrow', '15:00')"
         )
+        
         async def timestamps(interaction: discord.Interaction, time: str):
             try:
                 await interaction.response.defer(ephemeral=True)
@@ -796,22 +809,14 @@ class WhatTimeBot(discord.Client):
                 time_formatter = TimeFormatter(parsed_time)
                 formats = time_formatter.get_all_formats()
                 
-                # Create response
-                embed = discord.Embed(
-                    title="Discord Timestamp Formats",
-                    description="Copy and paste these codes into your message",
-                    color=discord.Color.blue()
-                )
-
+                # Create response with each code in its own code block
+                formatted_response = "**Discord Timestamp Formats**\nCopy any of these codes:\n\n"
+                
                 for name, code in formats.items():
-                    embed.add_field(
-                        name=name,
-                        value=f"Code: `{code}`\nShows as: {code}",
-                        inline=False
-                    )
+                    formatted_response += f"**{name}**\n`{code}`\nShows as: {code}\n\n"
 
                 await interaction.followup.send(
-                    embed=embed,
+                    formatted_response,
                     ephemeral=True
                 )
 
@@ -821,17 +826,6 @@ class WhatTimeBot(discord.Client):
                     "❌ Error formatting timestamps",
                     ephemeral=True
                 )
-
-# ---------------------------
-# 🔹 Main Execution
-# ---------------------------
-async def start_bot():
-    """Start the bot with proper error handling"""
-    bot = WhatTimeBot()
-    try:
-        logger.info("Starting bot...")
-        await bot.start(TOKEN)
-    except KeyboardInterrupt:
         logger.info("Shutting down bot gracefully...")
         await bot.close()
     except Exception as e:
