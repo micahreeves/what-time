@@ -985,12 +985,55 @@ class WhatTimeBot(discord.Client):
                     return
 
                 # Auto-generate display name if not provided
+                
                 if not display_name:
                     if timezone.upper() in COMMON_TIMEZONE_MAPPINGS:
-                        display_name = timezone.upper()
+                        if "America" in matched_timezone:
+                            display_name = f"🇺🇸 {timezone.upper()}"
+                        elif "Europe/London" in matched_timezone:
+                            display_name = f"🇬🇧 {timezone.upper()}"
+                        elif "Europe/Paris" in matched_timezone:
+                            display_name = f"🇫🇷 {timezone.upper()}"
+                        elif "Europe/Berlin" in matched_timezone:
+                            display_name = f"🇩🇪 {timezone.upper()}"
+                        elif "Asia/Tokyo" in matched_timezone:
+                            display_name = f"🇯🇵 {timezone.upper()}"
+                        else:
+                            display_name = timezone.upper()
+                        
                     else:
                         city = matched_timezone.split('/')[-1].replace('_', ' ')
-                        display_name = city
+                        if "America" in matched_timezone:
+                            display_name = f"🇺🇸 {city}"
+                        elif "Europe" in matched_timezone:
+                            if "London" in matched_timezone:
+                                display_name = f"🇬🇧 {city}"
+                            elif "Paris" in matched_timezone:
+                                display_name = f"🇫🇷 {city}"
+                            elif "Berlin" in matched_timezone:
+                                display_name = f"🇩🇪 {city}"
+                            elif "Oslo" in matched_timezone:
+                                display_name = f"🇳🇴 {city}"
+                            elif "Stockholm" in matched_timezone:
+                                display_name = f"🇸🇪 {city}"
+                            elif "Helsinki" in matched_timezone:
+                                display_name = f"🇫🇮 {city}"
+                            elif "Copenhagen" in matched_timezone:
+                                display_name = f"🇩🇰 {city}"
+                            else:
+                                display_name = f"🇪🇺 {city}"
+                        elif "Asia" in matched_timezone:
+                            if "Tokyo" in matched_timezone:
+                                display_name = f"🇯🇵 {city}"
+                            elif "Shanghai" in matched_timezone:
+                                display_name = f"🇨🇳 {city}"
+                            elif "Singapore" in matched_timezone:
+                                display_name = f"🇸🇬 {city}"
+                            else:
+                                display_name = f"🌏 {city}"
+                        else:
+                            display_name = city
+                
 
                 # Check current count
                 current_zones = await self.db.get_server_timezones(interaction.guild_id)
