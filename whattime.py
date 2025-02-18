@@ -578,30 +578,30 @@ class WhatTimeBot(discord.Client):
             logger.error(f"🚨 Command sync failed: {e}")
 
     async def format_time_conversions(self, dt: datetime, server_id: Optional[int] = None) -> str:
-        """Format time conversions for timezone list"""
-        conversions = []
-        try:
-            # Get server-specific timezones if in a server
-            server_timezones = await self.db.get_server_timezones(server_id) if server_id else {}
-            timezones_to_show = server_timezones or DEFAULT_TIMEZONES
+    """Format time conversions for timezone list"""
+    conversions = []
+    try:
+        # Get server-specific timezones if in a server
+        server_timezones = await self.db.get_server_timezones(server_id) if server_id else {}
+        timezones_to_show = server_timezones or DEFAULT_TIMEZONES
 
-            for name, tz_str in timezones_to_show.items():
-                local_time = dt.astimezone(pytz.timezone(tz_str))
-                clock_hour = local_time.hour % 12 or 12
-                clock_emoji = f":clock{clock_hour}:"
-                conversions.append(
-                    f"{clock_emoji} **{name}**: {local_time.strftime('%H:%M %Z')} ({local_time.strftime('%m/%d')})"
-                )
-            
-            return "\n".join(conversions)
-        except Exception as e:
-            logger.error(f"Error formatting time conversions: {e}")
-            return "Error formatting time conversions"
+        for name, tz_str in timezones_to_show.items():
+            local_time = dt.astimezone(pytz.timezone(tz_str))
+            clock_hour = local_time.hour % 12 or 12
+            clock_emoji = f":clock{clock_hour}:"
+            conversions.append(
+                f"{clock_emoji} **{name}**: {local_time.strftime('%H:%M %Z')} ({local_time.strftime('%m/%d')})"
+            )
+        
+        return "\n".join(conversions)
+    except Exception as e:
+        logger.error(f"Error formatting time conversions: {e}")
+        return "Error formatting time conversions"
 
-    async def register_commands(self):
+async def register_commands(self):
     """Register slash commands"""
     
-       async def timezone_autocomplete(
+    async def timezone_autocomplete(
         interaction: discord.Interaction,
         current: str,
     ) -> List[app_commands.Choice[str]]:
