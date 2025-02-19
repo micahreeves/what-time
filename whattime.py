@@ -746,7 +746,63 @@ class WhatTimeBot(discord.Client):
         @app_commands.describe(
             time="Time to convert (e.g., '3pm tomorrow', '15:00', 'in 2 hours')"
         )
-        
+        async def event_command(interaction: discord.Interaction, time: str):
+            """Handle time conversion requests"""
+            try:
+                #Acknowledge the interaction immediately
+                await interaction.response.defer()
+                
+                # Check timezone
+                user_timezone = await self.db.get_timezone(interaction.user.id)
+                if not user_timezone:
+                    embed = discord.Embed(
+                        title="❌ Timezone Required",
+                        description=(
+                            "Please set your timezone first using `/timezone`\n"
+                            "Example: `/timezone CST` or `/timezone America/Chicago`"
+                        ),
+                        color=discord.Color.red()
+                    )
+                    await interaction.followup.send(embed=embed, ephemeral=True)
+                    return
+                    
+                # Parse time
+                parsed_time = await self.time_parser.parse_time(time, user_timezone)
+                if not parsed_time:
+                    await interaction.followup.send(
+                        "❌ Could not understand that time format. Try something like:\n" +
+                        "• `3pm tomorrow`\n" +
+                        "• `15:00`\n" +
+                        "• `in 2 hours`",
+                        ephemeral=True
+                    )
+                    return
+                    
+                # Create response embed
+                local_time = parsed_time.astimezone(pytz.timezone(user_timezone))
+                embed = discord.Embed(
+                    title="🌍 Time Conversion",
+                    description=(
+                        f"**🕒 Time ({user_timezone})** → "
+                        f"`{local_time.strftime('%b %d, %H:%M %Z')}`\n\n"
+                        f"{await self.format_time_conversions(parsed_time, interaction.guild_id)}"
+                    ),
+                    color=discord.Color.blue()
+                )
+                
+                embed.set_footer(text=f"Requested by {interaction.user.name}")
+                await interaction.followup.send(embed=embed)
+
+            except Exception as e:
+                logger.error(f"Error in event command: {e}")
+                try:
+                    await interaction.followup.send(
+                        "❌ Error processing command",
+                        ephemeral=True
+                    )   
+                except:
+                    pass
+            
         async def event_command(interaction: discord.Interaction, time: str):
             """Handle time conversion requests"""
             try:
