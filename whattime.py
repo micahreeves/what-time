@@ -669,6 +669,7 @@ class WhatTimeBot(discord.Client):
         self.db = TimezoneDB()
         self.time_parser = TimeParser()
         self.calendar_formatter = CalendarFormatter()
+        self.timezone_handler = TimezoneHandler()
 
     async def setup_hook(self):
         """Called when the bot starts"""
