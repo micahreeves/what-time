@@ -484,61 +484,60 @@ class TimeParser:
             )[-1000:]
             self.cache = dict(sorted_items)
 
+    
     async def parse_time(self, input_text: str, base_timezone: str) -> Optional[datetime]:
         """Parse time with timezone awareness and caching"""
-        self._clean_cache()
-        
-        # Create cache key
-        cache_key = f"{input_text}:{base_timezone}"
-        
-        # Check cache
-        if cache_key in self.cache:
-            parsed_time, cache_time = self.cache[cache_key]
-            if cache_time + self._cache_lifetime > datetime.now():
-                return parsed_time
-
         try:
             # Clean input
             input_text = re.sub(r'\s+', ' ', input_text.strip().lower())
-            
+        
             # Handle special cases
             if input_text == "now":
                 result = datetime.now(pytz.timezone(base_timezone))
-            else:
-                # Parse with user's timezone
-                tz = pytz.timezone(base_timezone)
-                now = datetime.now(tz)
-                settings = {
-                    'RELATIVE_BASE': now,
-                    'TIMEZONE': base_timezone,
-                    'RETURN_AS_TIMEZONE_AWARE': True,
-                    'PREFER_DATES_FROM': 'current_period'  # Changed to prefer current day
-                }
-                
-                loop = asyncio.get_event_loop()
-                parsed_dt = await loop.run_in_executor(
-                    None,
-                    lambda: dateparser.parse(input_text, settings=settings)
-                )
-                
-                if parsed_dt:
-                    # If only time was provided (no date), use today's date
-                    if not any(word in input_text for word in ['tomorrow', 'today', 'next', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'monday']):
-                        # Check if the parsed time is earlier than current time
-                        if parsed_dt.hour < now.hour or (parsed_dt.hour == now.hour and parsed_dt.minute < now.minute):
-                            # If it's earlier than current time, assume tomorrow
-                            parsed_dt = parsed_dt + timedelta(days=1)
-                else:
-                    return None
+                return result.astimezone(pytz.UTC)
 
-                # Convert to UTC and cache
-                utc_time = parsed_dt.astimezone(pytz.UTC)
-                self.cache[cache_key] = (utc_time, datetime.now())
-                return utc_time
-            
-            result = result.astimezone(pytz.UTC)
-            self.cache[cache_key] = (result, datetime.now())
-            return result
+            # Get current time in user's timezone
+            tz = pytz.timezone(base_timezone)
+            now = datetime.now(tz)
+
+            # First try to parse it as a simple time (HH:MM)
+            time_match = re.match(r'^(\d{1,2}):(\d{2})$', input_text)
+            if time_match:
+                hour, minute = map(int, time_match.groups())
+                if 0 <= hour <= 23 and 0 <= minute <= 59:
+                    result = now.replace(
+                        hour=hour,
+                        minute=minute,
+                        second=0,
+                        microsecond=0
+                    )
+                    return result.astimezone(pytz.UTC)
+
+            # If not a simple time, use dateparser
+            settings = {
+                'RELATIVE_BASE': now,
+                'TIMEZONE': base_timezone,
+                'RETURN_AS_TIMEZONE_AWARE': True,
+                'PREFER_DATES_FROM': 'current_period'
+            }
+        
+            parsed_dt = await asyncio.get_event_loop().run_in_executor(
+                None,
+                lambda: dateparser.parse(input_text, settings=settings)
+            )
+        
+            if parsed_dt:
+                # If only time was provided (no date), use today's date
+                if not any(word in input_text for word in ['tomorrow', 'today', 'next', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'monday']):
+                    parsed_dt = now.replace(
+                        hour=parsed_dt.hour,
+                        minute=parsed_dt.minute,
+                        second=0,
+                        microsecond=0
+                    )
+                return parsed_dt.astimezone(pytz.UTC)
+        
+            return None
             
         except Exception as e:
             logger.error(f"Time parsing error: {e}")
@@ -677,6 +676,58 @@ class WhatTimeBot(discord.Client):
             except Exception as e:
                 logger.error(f"Error in timezone_name_autocomplete: {e}")
                 return []
+
+            @self.tree.command(
+                name="timezone",
+                description="Set your timezone for time conversions"
+            )
+            @app_commands.describe(
+                timezone="Your timezone (e.g., 'EST', 'CST', 'America/Chicago')"
+            )
+            @app_commands.autocomplete(timezone=timezone_autocomplete)
+            async def timezone_command(interaction: discord.Interaction, timezone: str):
+                """Set user timezone"""
+                try:
+                    await interaction.response.defer(ephemeral=True)
+        
+                    success, matched_timezone, suggestions = await self.db.set_timezone(
+                        interaction.user.id, 
+                        timezone
+                    )
+        
+                    if success:
+                        embed = discord.Embed(
+                            title="✅ Timezone Set",
+                            description=f"Your timezone has been set to `{matched_timezone}`",
+                            color=discord.Color.green()
+                        )
+                        await interaction.followup.send(embed=embed, ephemeral=True)
+                    else:
+                        if suggestions:
+                            suggestions_text = "\n".join([
+                                f"• `{tz}` - {tz.replace('_', ' ')}" 
+                                for tz in suggestions
+                            ])
+                            await interaction.followup.send(
+                                f"❌ Invalid timezone. Did you mean:\n{suggestions_text}\n\n"
+                                "Try using the autocomplete suggestions when typing!",
+                                ephemeral=True
+                            )
+                        else:
+                            await interaction.followup.send(
+                                "❌ Failed to set timezone. Please try again.",
+                                ephemeral=True
+                            )
+                except Exception as e:
+                    logger.error(f"Error in timezone command: {e}")
+                    await interaction.followup.send(
+                        "❌ Error setting timezone",
+                        ephemeral=True
+                    )
+                    await interaction.followup.send(
+                        "❌ Error setting timezone",
+                        ephemeral=True
+                    )
 
         @self.tree.command(
             name="remove_timezone",
