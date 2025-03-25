@@ -21,6 +21,13 @@ from typing import Optional, Tuple, Dict, Union, Any, List
 import re
 from fuzzywuzzy import process
 from urllib.parse import quote
+from datetime import datetime, timedelta
+try:
+    # Python 3.9+
+    from zoneinfo import ZoneInfo
+except ImportError:
+    # Python 3.6-3.8
+    from backports.zoneinfo import ZoneInfo
 
 # ---------------------------
 # 🔹 Environment Configuration
@@ -538,7 +545,12 @@ class TimeParser:
             input_text = re.sub(r'\s+', ' ', input_text.strip().lower())
             
             # Get current time in user's timezone
-            tz = pytz.timezone(base_timezone)
+            try:
+                tz = ZoneInfo(base_timezone)
+            except Exception:
+                # Fall back to pytz
+                tz = pytz.timezone(base_timezone)
+            
             now = datetime.now(tz)
             
             # Handle special cases
@@ -1288,25 +1300,17 @@ class WhatTimeBot(discord.Client):
             timezones_to_show = server_timezones or DEFAULT_TIMEZONES
 
             for name, tz_str in timezones_to_show.items():
-                tz = pytz.timezone(tz_str)
-                local_time = dt.astimezone(tz)
-            
-                # Get timezone abbreviation, checking DST status
-                is_dst = local_time.dst().total_seconds() > 0
-            
-                # Special handling for common timezones
-                tz_abbr = local_time.strftime('%Z')
-                if tz_str == "Europe/London":
-                    tz_abbr = "BST" if is_dst else "GMT"
-                elif tz_str == "America/New_York":
-                    tz_abbr = "EDT" if is_dst else "EST"
-                elif tz_str == "America/Chicago":
-                    tz_abbr = "CDT" if is_dst else "CST"
-                elif tz_str == "America/Denver":
-                    tz_abbr = "MDT" if is_dst else "MST"
-                elif tz_str == "America/Los_Angeles":
-                    tz_abbr = "PDT" if is_dst else "PST"
-            
+                # Get datetime in the target timezone
+                try:
+                    # First try with ZoneInfo
+                    local_time = dt.astimezone(ZoneInfo(tz_str))
+                except Exception:
+                    # Fall back to pytz if needed
+                    local_time = dt.astimezone(pytz.timezone(tz_str))
+
+                 # Get the timezone abbreviation directly from the datetime
+                tz_abbr = local_time.tzname() or tz_str.split('/')[-1]
+
                 clock_hour = local_time.hour % 12 or 12
                 clock_emoji = f":clock{clock_hour}:"
             
