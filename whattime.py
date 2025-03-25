@@ -623,8 +623,18 @@ class TimeParser:
                 None,
                 lambda: dateparser.parse(input_text, settings=settings)
             )
-            
+
             if parsed_dt:
+                # Check if parsed date is different from today
+                is_different_date = (
+                    parsed_dt.year != now.year or
+                    parsed_dt.month != now.month or
+                    parsed_dt.day != now.day
+                )
+            
+                if is_different_date or 'tomorrow' in input_text.lower():
+                    return parsed_dt.astimezone(pytz.UTC)
+
                 # Check if the input only specified a time (no date indicators)
                 has_date_indicator = any(word in input_text for word in [
                     'tomorrow', 'today', 'next', 'tuesday', 'wednesday', 
@@ -1227,6 +1237,14 @@ class WhatTimeBot(discord.Client):
                 tz_abbr = local_time.strftime('%Z')
                 if tz_str == "Europe/London":
                     tz_abbr = "BST" if is_dst else "GMT"
+                elif tz_str == "America/New_York":
+                    tz_abbr = "EDT" if is_dst else "EST"
+                elif tz_str == "America/Chicago":
+                    tz_abbr = "CDT" if is_dst else "CST"
+                elif tz_str == "America/Denver":
+                    tz_abbr = "MDT" if is_dst else "MST"
+                elif tz_str == "America/Los_Angeles":
+                    tz_abbr = "PDT" if is_dst else "PST"
             
                 clock_hour = local_time.hour % 12 or 12
                 clock_emoji = f":clock{clock_hour}:"
