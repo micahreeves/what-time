@@ -1279,6 +1279,11 @@ def main():
     """Main entry point with error handling and retry logic"""
     retry_count = 0
     base_delay = INITIAL_RETRY_DELAY
+
+    # Add this at the very start of the main() function
+    current_time = datetime.now()
+    print(f"System reports current time as: {current_time}")
+    print(f"System timezone info: {time.tzname}")
     
     while retry_count < MAX_RETRIES:
         try:
