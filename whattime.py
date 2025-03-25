@@ -1217,13 +1217,24 @@ class WhatTimeBot(discord.Client):
             timezones_to_show = server_timezones or DEFAULT_TIMEZONES
 
             for name, tz_str in timezones_to_show.items():
-                local_time = dt.astimezone(pytz.timezone(tz_str))
+                tz = pytz.timezone(tz_str)
+                local_time = dt.astimezone(tz)
+            
+                # Get timezone abbreviation, checking DST status
+                is_dst = local_time.dst().total_seconds() > 0
+            
+                # Special handling for common timezones
+                tz_abbr = local_time.strftime('%Z')
+                if tz_str == "Europe/London":
+                    tz_abbr = "BST" if is_dst else "GMT"
+            
                 clock_hour = local_time.hour % 12 or 12
                 clock_emoji = f":clock{clock_hour}:"
-                conversions.append(
-                    f"{clock_emoji} **{name}**: {local_time.strftime('%H:%M %Z')} ({local_time.strftime('%m/%d')})"
-                )
             
+                conversions.append(
+                    f"{clock_emoji} **{name}**: {local_time.strftime('%H:%M')} {tz_abbr} ({local_time.strftime('%m/%d')})"
+                )
+        
             return "\n".join(conversions)
         except Exception as e:
             logger.error(f"Error formatting time conversions: {e}")
