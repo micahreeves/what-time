@@ -618,6 +618,67 @@ class TimeParser:
                 'PREFER_DATES_FROM': 'current_period',
                 'PREFER_DAY_OF_MONTH': 'current'
             }
+
+            # Add special handling for month + day format like "March 30"
+            month_day_pattern = re.compile(
+                r'(january|february|march|april|may|june|july|august|september|october|november|december)\s+(\d{1,2})',
+                re.IGNORECASE
+            )
+            month_day_match = month_day_pattern.search(input_text)
+
+            if month_day_match:
+                logger.info(f"Found month_day pattern: {month_day_match.groups()}")
+                month_name, day = month_day_match.groups()
+                day = int(day)
+                
+                # Map month names to numbers
+                month_map = {
+                    'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
+                    'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
+                }
+                month = month_map[month_name.lower()]
+                
+                # Extract time from the remaining string
+                time_part = input_text.replace(month_day_match.group(), '').strip()
+                time_match = self.time_pattern.match(time_part)
+                simple_hour_match = self.simple_hour_pattern.match(time_part)
+                
+                # Default time values
+                hour, minute = 0, 0
+                
+                # Extract time if specified
+                if time_match:
+                    hour, minute, meridian = time_match.groups()
+                    hour = int(hour)
+                    minute = int(minute)
+                    if meridian and meridian.lower() == 'pm' and hour < 12:
+                        hour += 12
+                    elif meridian and meridian.lower() == 'am' and hour == 12:
+                        hour = 0
+                elif simple_hour_match:
+                    hour, meridian = simple_hour_match.groups()
+                    hour = int(hour)
+                    if meridian.lower() == 'pm' and hour < 12:
+                        hour += 12
+                    elif meridian.lower() == 'am' and hour == 12:
+                        hour = 0
+                
+                # Create the datetime object
+                year = now.year
+                # Handle if the date has already passed this year
+                if month < now.month or (month == now.month and day < now.day):
+                    year += 1
+                    
+                try:
+                    # Create the datetime with the extracted information
+                    result = datetime(year, month, day, hour, minute, 0, 0)
+                    # Convert to user's timezone
+                    result = result.replace(tzinfo=tz)
+                    logger.info(f"Created specific date: {result}")
+                    return result
+                except ValueError as e:
+                    logger.error(f"Error creating date: {e}")
+                    # Continue with regular parsing if this fails
             
             parsed_dt = await asyncio.get_event_loop().run_in_executor(
                 None,
